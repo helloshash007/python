@@ -1,0 +1,31 @@
+import os
+import time
+import shutil
+
+# Source directory path
+source_directory = '/path/to/source/directory'
+
+# Destination directory path
+destination_directory = '/path/to/destination/directory'
+
+# List all files in the source directory
+files = os.listdir(source_directory)
+
+for filename in files:
+    # Create the new filename by replacing "." with "_" and adding ".txt"
+    new_filename = filename.replace(".", "_") + ".txt"
+    
+    # Construct the full source and destination paths
+    source_path = os.path.join(source_directory, filename)
+    destination_path = os.path.join(destination_directory, new_filename)
+    
+    # Rename the file
+    os.rename(source_path, destination_path)
+    
+    # Move the renamed file to the destination directory
+    shutil.move(destination_path, destination_directory)
+    
+    # Wait for 1 minute before moving the next file
+    time.sleep(60)
+
+print("All files have been renamed and moved with a 1-minute gap.")
