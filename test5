@@ -1,0 +1,53 @@
+import os
+import time
+import shutil
+import logging
+import pyinotify
+
+# Source directory path
+source_directory = '/path/to/source/directory'
+
+# Destination directory path
+destination_directory = '/path/to/destination/directory'
+
+# Initialize logging
+logging.basicConfig(
+    level=logging.INFO,
+    filename='/path/to/logfile.log',  # Replace with your log file path
+    format='%(asctime)s - %(message)s',
+)
+
+class FileEventHandler(pyinotify.ProcessEvent):
+    def process_default(self, event):
+        if event.mask & pyinotify.IN_MODIFY:
+            filename = os.path.basename(event.pathname)
+            new_filename = filename.replace(".", "_") + ".txt"
+            source_path = event.pathname
+            destination_path = os.path.join(destination_directory, new_filename)
+            try:
+                # Rename the file
+                os.rename(source_path, destination_path)
+                # Move the renamed file to the destination directory
+                shutil.move(destination_path, destination_directory)
+                logging.info(f"File {filename} modified, renamed, and moved.")
+            except Exception as e:
+                logging.error(f"Error processing file {filename}: {str(e)}")
+
+if __name__ == "__main":
+    # Initialize the WatchManager and Notifier
+    wm = pyinotify.WatchManager()
+    handler = FileEventHandler()
+    notifier = pyinotify.Notifier(wm, handler)
+
+    # Watch the source directory for modification events
+    wdd = wm.add_watch(source_directory, pyinotify.IN_MODIFY)
+
+    logging.info("File monitoring and processing started.")
+    try:
+        while True:
+            notifier.process_events()
+            if notifier.check_events():
+                notifier.read_events()
+    except KeyboardInterrupt:
+        logging.info("File monitoring stopped.")
+        notifier.stop()
