@@ -2,6 +2,10 @@ import schedule
 import time
 import os
 import shutil
+import logging
+
+# Configure logging
+logging.basicConfig(filename='file_processing.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
 
 def copy_and_rename_files():
     source_directory = "Directory_A"
@@ -11,6 +15,7 @@ def copy_and_rename_files():
         if filename.endswith(".MT940"):
             new_filename = filename.replace(".", "_") + ".txt"
             shutil.copy(os.path.join(source_directory, filename), os.path.join(destination_directory, new_filename))
+            logging.info(f"Copied and renamed: {filename} -> {new_filename}")
 
 def move_latest_file():
     directory_b = "Directory_B"
@@ -21,6 +26,7 @@ def move_latest_file():
     if file_list:
         latest_file = max(file_list, key=os.path.getctime)
         shutil.move(os.path.join(directory_b, latest_file), os.path.join(directory_c, latest_file))
+        logging.info(f"Moved latest file: {latest_file} to Directory_C")
 
 def process_files_in_directory_c():
     directory_c = "Directory_C"
@@ -35,7 +41,7 @@ def process_files_in_directory_c():
                     account_number = line.split(":25:")[1].strip()
                 if ":60F" in line:
                     currency = line.split(":60F")[1].strip()
-            print(f"Account Number: {account_number}, Currency: {currency}")
+            logging.info(f"Processed file: {filename} - Account Number: {account_number}, Currency: {currency}")
 
 # Schedule the tasks
 schedule.every(5).minutes.do(copy_and_rename_files)
