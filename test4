@@ -1,0 +1,39 @@
+import os
+import shutil
+import time
+
+# Source and backup directories
+source_dir = "/path/to/source_directory"
+backup_dir = "/path/to/backup_directory"
+
+# Check interval (in seconds)
+check_interval = 60  # Adjust as needed
+
+# Create the backup directory if it doesn't exist
+if not os.path.exists(backup_dir):
+    os.makedirs(backup_dir)
+
+# Dictionary to store file modification times
+file_modification_times = {}
+
+while True:
+    for root, _, files in os.walk(source_dir):
+        for file in files:
+            source_file = os.path.join(root, file)
+            backup_file = os.path.join(backup_dir, file)
+
+            # Get the last modification time of the file
+            source_file_mtime = os.path.getmtime(source_file)
+
+            if source_file in file_modification_times:
+                # Check if the file has been modified since the last check
+                if source_file_mtime > file_modification_times[source_file]:
+                    print(f"Copying {source_file} to backup directory.")
+                    shutil.copy2(source_file, backup_file)
+                    file_modification_times[source_file] = source_file_mtime
+            else:
+                # Add the file to the dictionary with its current modification time
+                file_modification_times[source_file] = source_file_mtime
+
+    # Sleep for the specified interval before checking again
+    time.sleep(check_interval)
