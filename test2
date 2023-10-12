@@ -1,0 +1,36 @@
+import os
+import shutil
+import time
+
+source_dir = "/path/to/source_directory"
+destination_dir = "/path/to/destination_directory"
+
+# Ensure the source directory exists
+if not os.path.exists(source_dir):
+    print(f"Source directory '{source_dir}' does not exist.")
+    exit(1)
+
+# Ensure the destination directory exists; create it if it doesn't
+if not os.path.exists(destination_dir):
+    os.makedirs(destination_dir)
+
+# List all files in the source directory
+files = os.listdir(source_dir)
+
+# Iterate through the files and move them one by one with a 1-minute gap
+for file_name in files:
+    source_file = os.path.join(source_dir, file_name)
+    destination_file = os.path.join(destination_dir, file_name)
+
+    # Check if the source is a file (not a directory)
+    if os.path.isfile(source_file):
+        try:
+            shutil.move(source_file, destination_file)
+            print(f"Moved '{file_name}' to '{destination_dir}'")
+
+            # Wait for 1 minute before moving the next file
+            time.sleep(60)
+        except Exception as e:
+            print(f"Error moving '{file_name}': {e}")
+
+print("All files moved.")
