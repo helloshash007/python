@@ -1,6 +1,9 @@
 import os
 import time
 import shutil
+import logging
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 # Source directory path
 source_directory = '/path/to/source/directory'
@@ -8,24 +11,41 @@ source_directory = '/path/to/source/directory'
 # Destination directory path
 destination_directory = '/path/to/destination/directory'
 
-# List all files in the source directory
-files = os.listdir(source_directory)
+# Initialize logging
+logging.basicConfig(
+    level=logging.INFO,
+    filename='/path/to/logfile.log',  # Replace with your log file path
+    format='%(asctime)s - %(message)s',
+)
 
-for filename in files:
-    # Create the new filename by replacing "." with "_" and adding ".txt"
-    new_filename = filename.replace(".", "_") + ".txt"
-    
-    # Construct the full source and destination paths
-    source_path = os.path.join(source_directory, filename)
-    destination_path = os.path.join(destination_directory, new_filename)
-    
-    # Rename the file
-    os.rename(source_path, destination_path)
-    
-    # Move the renamed file to the destination directory
-    shutil.move(destination_path, destination_directory)
-    
-    # Wait for 1 minute before moving the next file
-    time.sleep(60)
+class FileHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if event.is_directory:
+            return
+        filename = os.path.basename(event.src_path)
+        new_filename = filename.replace(".", "_") + ".txt"
+        source_path = os.path.join(source_directory, filename)
+        destination_path = os.path.join(destination_directory, new_filename)
+        try:
+            # Rename the file
+            os.rename(source_path, destination_path)
+            # Move the renamed file to the destination directory
+            shutil.move(destination_path, destination_directory)
+            logging.info(f"File {filename} modified, renamed, and moved.")
+        except Exception as e:
+            logging.error(f"Error processing file {filename}: {str(e)}")
 
-print("All files have been renamed and moved with a 1-minute gap.")
+if __name__ == "__main":
+    event_handler = FileHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path=source_directory, recursive=False)
+    observer.start()
+
+    try:
+        logging.info("File monitoring and processing started.")
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+        logging.info("File monitoring stopped.")
+    observer.join()
