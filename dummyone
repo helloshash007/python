@@ -1,0 +1,187 @@
+main.py 
+import os
+import argparse
+import json
+import traceback
+import subprocess
+import glob
+import shutil
+import logging
+from datetime import datetime
+
+# Configure the logging
+log_file = "process2.log"
+logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+lock_file = "process2.lock"
+
+# Check if the lock file exists. If it does, it means the process is already running.
+if os.path.isfile(lock_file):
+    logger.error("Another instance of the process is already running.")
+    sys.exit(1)
+
+# Create the lock file to indicate that this process is running.
+with open(lock_file, "w") as lock:
+    lock.write(str(os.getpid()))
+
+try:
+    def readDataFromFile(path):
+        try:
+            with open(path, 'r') as f:
+                data = f.read()
+        except Exception as e:
+            traceback.print_exc()
+        return data
+
+    def processRawData(data):
+        data = data.split("\n")
+        data_len = len(data)
+        hashmap = {}
+
+        for i in range(int(data_len / 2)):
+            try:
+                hashmap[str(i)] = json.loads(data[i * 2].replace('=>', ':').replace('nil', 'null'))
+            except Exception as e:
+                traceback.print_exc()
+        return hashmap
+
+    def searchForRecord(process_data, sp_acc_num, sp_acc_curr_code):
+        result = {}
+        count = 0
+        for index, _map in process_data.items():
+            for key, value in _map.items():
+                if "line_type" in key:
+                    for record in _map[key]:
+                        acc_num = record["account_number"]
+                        acc_curr = record["account_currency"]
+                        if acc_num == sp_acc_num and acc_curr == sp_acc_curr_code:
+                            count = count + 1
+                            result["customer_country"] = record["customer_country"]
+                            result["customer_institution"] = record["customer_institution"]
+                            result["customer_identifier"] = record["customer_identifier"]
+        return result, count
+
+    def searchRecord(filepath, sp_acc_num, sp_acc_curr_code):
+        raw_data = readDataFromFile(filepath)
+        process_data = processRawData(raw_data)
+        searchResult = searchForRecord(process_data, sp_acc_num, sp_acc_curr_code)
+        return searchResult
+
+    if __name__ == "__main__":
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--path", help="path to Test file", required=True)
+        parser.add_argument("--accNum", help="Query Account Number", required=True)
+        parser.add_argument("--currCode", help="Query Currency Code", required=True)  # Corrected the argument name
+        args = parser.parse_args()
+        result, count = searchRecord(args.path, args.accNum, args.currCode)
+        logger.info(result)
+        if count == 1:
+            now = datetime.now()
+            logger.info(now)
+            Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"])
+            logger.info("Cust ID = %s", Cust_Ident)
+            subprocess.call(['bash', '/home/cffadmin/cff/execution.sh', Cust_Ident])
+        elif count == 0:  # Changed the condition from = to ==
+            logger.info("No Record Found")
+            list_of_files = glob.glob('/opt/hsbc/CashAnalytics_Data01/gir_reponse/*')
+            latest_file = max(list_of_files, key=os.path.getctime)
+            logger.info("Failed_FileName = %s", latest_file)
+            logger.info("Moving File to Failed Directory")
+            shutil.move(latest_file, "/opt/habs/CashAnalytics_Data01/gir_failed/")
+        else:
+            logger.info("Multiple Record Found")
+            list_of_files = glob.glob('/opt/hsbc/CashAnalytics_Data01/gir_reponse/*')
+            latest_file = max(list_of_files, key=os.path.getctime)
+            logger.info("Failed_FileName = %s", latest_file)
+            logger.info("Moving File to Failed Directory")
+            shutil.move(latest_file, "/opt/hks/CashAnalytics_Data01/gir_failed/")
+
+finally:
+    # Remove the lock file when the process is done or encounters an error.
+    if os.path.isfile(lock_file):
+        os.remove(lock_file)
+
+# Log the completion of the script
+logger.info("Process 2 completed successfully.")
+
+*****************************************
+
+File_parser.py
+
+
+                                  import os
+import sys
+import argparse
+from argparse import ArgumentParser
+import subprocess
+import glob
+import logging
+from datetime import datetime
+
+# Configure the logging
+log_file = "process1.log"
+logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+lock_file = "process1.lock"
+
+# Check if the lock file exists. If it does, it means the process is already running.
+if os.path.isfile(lock_file):
+    logger.error("Another instance of the process is already running.")
+    sys.exit(1)
+
+# Create the lock file to indicate that this process is running.
+with open(lock_file, "w") as lock:
+    lock.write(str(os.getpid())
+
+try:
+    now = datetime.now()
+    str_now = str(now)
+    logger.info("File Processing Start Time: %s", str_now)
+
+    parser = ArgumentParser()
+    parser.add_argument("-f", "--file", dest="myfile", help="open specified file")
+    args = parser.parse_args()
+    myFile = args.myfile
+    logger.info("Specified file: %s", myFile)
+
+    list_of_files = glob.glob('/home/admin/ctt/latest_file/*')
+    CustomerFilePath = max(list_of_files, key=os.path.getctime)
+
+    if os.path.isfile(CustomerFilePath):
+        logger.info("Cust file does exist")
+    else:
+        logger.error("Error: No Latest Cust file")
+
+    logger.info("Customer File Path: %s", CustomerFilePath)
+
+    with open(myFile, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            val1 = ':25:'
+            if val1 in line:
+                account_number = line[4:].strip('\n').strip()
+                logger.info("Account Number = %s", account_number)
+
+        for data in lines:
+            val = ':60F:'
+            if val in data:
+                currency = data[12:15]
+                logger.info("Currency = %s", currency)
+                b = open('results.txt', 'w')
+                b.write(myFile)
+                b.close()
+
+    subprocess.call(['python', '/home/etfadssn/eft/main.py', "--path", CustomerFilePath, '--accNum', account_number, '--currCode', currency])
+
+finally:
+    # Remove the lock file when the process is done or encounters an error.
+    if os.path.isfile(lock_file):
+        os.remove(lock_file)
+
+# Log the completion of the script
+logger.info("Process 1 completed successfully.")
+
+
+               
