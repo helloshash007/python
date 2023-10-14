@@ -1,0 +1,55 @@
+import os
+import argparse
+import glob
+from datetime import datetime
+
+now = datetime.now()
+current_time = str(now)
+print("File Processing Start Time:", current_time)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--file", dest="myfile", help="open specified file")
+args = parser.parse_args()
+myFile = args.myfile
+print(myFile)
+
+list_of_files = glob.glob('/home/admin/ctt/latest_file/*')
+CustomerFilePath = max(list_of_files, key=os.path.getctime)
+
+if os.path.isfile(CustomerFilePath):
+    print("Cust file does exist")
+else:
+    print("Error: No Latest Cust file")
+
+print(CustomerFilePath)
+
+with open(myFile, 'r') as f:
+    lines = f.readlines()
+    for line in lines:
+        val1 = ':25:'
+        if val1 in line:
+            account_number = line[4:].strip('\n').strip()
+            print("Account Number =", account_number)
+
+    for data in lines:
+        val = ':60F:'
+        if val in data:
+            currency = data[12:15]
+            print("Currency =", currency)
+
+with open('results.txt', 'w') as b:
+    b.write(myFile)
+
+# The following code replaces the subprocess call from the original code
+# Implement the functionality directly in Python
+# You will need to adapt this code to your specific requirements
+# Example code:
+
+# Define your function to replace the subprocess call
+def process_data(CustomerFilePath, account_number, currency):
+    # Your code to process data here
+    # You should implement the logic that was previously handled by subprocess
+    # For example, if you need to run a different script or function, do it here
+
+# Call the function with the required parameters
+process_data(CustomerFilePath, account_number, currency)
