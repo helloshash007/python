@@ -1,17 +1,22 @@
 import os
+import sys
 import argparse
-import json
-import traceback
+import subprocess
 import glob
 import shutil
 from datetime import datetime
+import logging
+
+# Configure logging
+logging.basicConfig(filename='combined_log.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def readDataFromFile(path):
     try:
         with open(path, 'r') as f:
             data = f.read()
     except Exception as e:
-        traceback.print_exc()
+        logging.error(f"Error reading data from file: {e}")
+        return None
     return data
 
 def processRawData(data):
@@ -23,7 +28,8 @@ def processRawData(data):
         try:
             hashmap[str(i)] = json.loads(data[i * 2].replace('=>', ':').replace('nil', 'null'))
         except Exception as e:
-            traceback.print_exc()
+            logging.error(f"Error processing raw data: {e}")
+            return None
     return hashmap
 
 def searchForRecord(process_data, sp_acc_num, sp_acc_curr_code):
@@ -44,7 +50,11 @@ def searchForRecord(process_data, sp_acc_num, sp_acc_curr_code):
 
 def searchRecord(filepath, sp_acc_num, sp_acc_curr_code):
     raw_data = readDataFromFile(filepath)
+    if raw_data is None:
+        return None, 0
     process_data = processRawData(raw_data)
+    if process_data is None:
+        return None, 0
     searchResult = searchForRecord(process_data, sp_acc_num, sp_acc_curr_code)
     return searchResult
 
@@ -54,14 +64,25 @@ def getLatestCustomerFile():
     return latest_file
 
 if __name__ == "__main__":
+    # Original code from code 1
+    now = datetime.now()
+    str_now = str(now)
+    print("File Processing Start Time: " + str_now)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", help="path to Test file", required=True)
-    parser.add_argument("--accNum", help="Query Account Number", required=True)
-    parser.add_argument("--currCode", help="Query Currency Code", required=True)
+    parser.add_argument("-f", "--file", dest="myfile", help="open specified file")
     args = parser.parse_args()
+    myFile = args.myfile
+    print(myFile)
+    
+    list_of_files = glob.glob('/home/admin/ctt/latest_file/*')
+    CustomerFilePath = max(list_of_files, key=os.path.getctime)
+    
+    if os.path.isfile(CustomerFilePath):
+        print("Cust file does exist")
+    else:
+        print("Error: No Latest Cust file")
+    print(CustomerFilePath)
 
-    # Original code
-    myFile = args.path
     with open(myFile, 'r') as f:
         lines = f.readlines()
         for line in lines:
@@ -76,16 +97,22 @@ if __name__ == "__main__":
                 currency = data[12:15]
                 print("Currency=", currency)
 
-    # Get the latest customer file
-    customer_file = getLatestCustomerFile()
-
-    # Remaining code from main.py
-    result, count = searchRecord(customer_file, args.accNum, args.currCode)
-    print(result)
+    # Original code from code 2
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path", help="path to Test file", required=True)
+    parser.add_argument("--accNum", help="Query Account Number", required=True)
+    parser.add_argument("--currCode", help="Query Currency Code", required=True)
+    args = parser.parse_args()
+    result, count = searchRecord(args.path, args.accNum, args.currCode)
+    if result is not None:
+        logging.info("Search result: %s", result)
+    else:
+        logging.error("Search result is None")
 
     if count == 1:
         now = datetime.now()
         print(now)
+        Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"])
         Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"])
         print("Cust ID =", Cust_Ident)
         subprocess.call(['bash', '/home/cffadmin/cff/execution.sh', Cust_Ident])
