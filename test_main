@@ -61,6 +61,7 @@ if __name__ == "__main__":
         now = datetime.now()
         print(now)
         Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"])
+        Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"]])
         print("Cust ID =", Cust_Ident)
         subprocess.call(['bash', '/home/cffadmin/cff/execution.sh', Cust_Ident])
     elif count == 0:  # Changed the condition from = to ==
