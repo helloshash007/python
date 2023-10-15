@@ -23,3 +23,36 @@ for count in range(max_loop):
     open(ok_file_path, 'a').close()
 
 log("Maximum number of trials reached")
+
+
+
+
+
+
+
+
+# Copy Files with updated parameters
+file_list = os.listdir(file_location)
+max_loop = len(file_list)
+
+for count in range(max_loop):
+    new_file = max(file_list, key=lambda x: os.path.getctime(os.path.join(file_location, x)))  # Fix the missing closing parenthesis
+    log(new_file)
+    name = os.path.splitext(new_file)[0]
+    log(name)
+
+    # Simulate sleep
+    time.sleep(10)
+
+    log("Moving File to Connect Directory")
+    shutil.move(os.path.join(file_location, new_file),
+                f"/opt/babc/CashBalance_Data01/connect_incoming/ABC00011111_{sys.argv[1]}_CFF_bank_{name}.mt940")
+
+    # Simulate sleep
+    time.sleep(10)
+
+    # Create a .ok file
+    ok_file_path = f"/opt/babc/CashBalance_Data01/connect_incoming/ABC00011111_{sys.argv[1]}_CFF_bank_{name}.mt940.ok"
+    open(ok_file_path, 'a').close()
+
+log("Maximum number of trials reached")
