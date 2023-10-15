@@ -1,0 +1,154 @@
+import os
+import argparse
+import json
+import traceback
+import glob
+import shutil
+from datetime import datetime
+import subprocess
+import time
+import sys
+
+# Get the current timestamp
+now = datetime.now()
+print("File Processing Start Time:", str(now))
+
+# Parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--file", dest="myfile", help="Open specified file")
+parser.add_argument("--path", help="path to Test file", required=True)
+parser.add_argument("--accNum", help="Query Account Number", required=True)
+parser.add_argument("--currCode", help="Query Currency Code", required=True)
+args = parser.parse_args()
+
+myFile = args.myfile
+CustomerFilePath = args.path
+
+print("Selected File:", myFile)
+print("Customer File Path:", CustomerFilePath)
+
+# Check if the customer file exists
+if os.path.isfile(CustomerFilePath):
+    print("Customer file does exist")
+else:
+    print("Error: No Latest Customer file")
+
+# Read and process the specified file
+with open(myFile, 'r') as f:
+    lines = f.readlines()
+    account_number = None
+    currency = None
+
+    for line in lines:
+        if ':25:' in line:
+            account_number = line[4:].strip('\n').strip()
+            print("Account Number =", account_number)
+
+        if ':60F:' in line:
+            currency = line[12:15]
+            print("Currency =", currency)
+
+# Write results to a file
+with open('results.txt', 'w') as b:
+    b.write(f"Customer File: {myFile}\n")
+    b.write(f"Account Number: {account_number}\n")
+    b.write(f"Currency: {currency}\n")
+
+# Perform the record search and processing from the original main.py
+def readDataFromFile(path):
+    try:
+        with open(path, 'r') as f:
+            data = f.read()
+    except Exception as e:
+        traceback.print_exc()
+    return data
+
+def processRawData(data):
+    data = data.split("\n")
+    data_len = len(data)
+    hashmap = {}
+
+    for i in range(int(data_len / 2)):
+        try:
+            hashmap[str(i)] = json.loads(data[i * 2].replace('=>', ':').replace('nil', 'null'))
+        except Exception as e:
+            traceback.print_exc()
+    return hashmap
+
+def searchForRecord(process_data, sp_acc_num, sp_acc_curr_code):
+    result = {}
+    count = 0
+    for index, _map in process_data.items():
+        for key, value in _map.items():
+            if "line_type" in key:
+                for record in _map[key]:
+                    acc_num = record["account_number"]
+                    acc_curr = record["account_currency"]
+                    if acc_num == sp_acc_num and acc_curr == sp_acc_curr_code:
+                        count = count + 1
+                        result["customer_country"] = record["customer_country"]
+                        result["customer_institution"] = record["customer_institution"]
+                        result["customer_identifier"] = record["customer_identifier"]
+    return result, count
+
+def searchRecord(filepath, sp_acc_num, sp_acc_curr_code):
+    raw_data = readDataFromFile(filepath)
+    process_data = processRawData(raw_data)
+    searchResult = searchForRecord(process_data, sp_acc_num, sp_acc_curr_code)
+    return searchResult
+
+# Perform the record search and processing
+result, count = searchRecord(CustomerFilePath, account_number, currency)
+print(result)
+if count == 1:
+    now = datetime.now()
+    print(now)
+    Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"])
+    print("Cust ID =", Cust_Ident)
+    # Removed subprocess call here
+    # subprocess.call(['bash', '/home/cffadmin/cff/execution.sh', Cust_Ident])
+elif count == 0:
+    print("No Record Found")
+    list_of_files = glob.glob('/opt/hsbc/CashAnalytics_Data01/gir_reponse/*')
+    latest_file = max(list_of_files, key=os.path.getctime)
+    print("Failed_FileName =", latest_file)
+    print("Moving File to Failed Directory")
+    shutil.move(latest_file, "/opt/habs/CashAnalytics_Data01/gir_failed/")
+else:
+    print("Multiple Record Found")
+    list_of_files = glob.glob('/opt/hsbc/CashAnalytics_Data01/gir_reponse/*')
+    latest_file = max(list_of_files, key=os.path.getctime)
+    print("Failed_FileName =", latest_file)
+    print("Moving File to Failed Directory")
+    shutil.move(latest_file, "/opt/hsks/CashAnalytics_Data01/gir_failed/")
+
+# Continue with the second script
+# Variable Declarations
+file_location = "/opt/hsbc/Data01/ABC_reponse/"
+dummy_pc = "ABC00011111"
+
+# Copy Files with updated parameters
+file_list = os.listdir(file_location)
+max_loop = len(file_list)
+
+for count in range(max_loop):
+    new_file = max(file_list, key=lambda x: os.path.getctime(os.path.join(file_location, x))
+    print(new_file)
+    name = os.path.splitext(new_file)[0]
+    print(name)
+
+    # Simulate sleep
+    time.sleep(10)
+
+    print("Moving File to Connect Directory")
+    shutil.move(os.path.join(file_location, new_file),
+                f"/opt/babc/CashBalance_Data01/connect_incoming/ABC00011111_{sys.argv[1]}_CFF_bank_{name}.mt940")
+
+    # Simulate sleep
+    time.sleep(10)
+
+    # Create a .ok file
+    ok_file_path = f"/opt/babc/CashBalance_Data01/connect_incoming/ABC00011111_{sys.argv[1]}_CFF_bank_{name}.mt940.ok"
+    open(ok_file_path, 'a').close()
+
+print("Maximum number of trials reached")
