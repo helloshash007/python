@@ -1,0 +1,68 @@
+import time
+import os
+import logging
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import shutil
+
+# Set up logging
+logging.basicConfig(filename='monitoring_log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
+
+# Create a list to keep track of processed files
+processed_files = set()
+
+class MyHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if not event.is_directory:
+            source_file = event.src_path
+
+            # Check if the file has already been processed
+            if source_file in processed_files:
+                return
+
+            # Backup the file to another location
+            backup_dir = '/path/to/backup_directory'
+            shutil.copy(source_file, backup_dir)
+
+            # Rename the file and change the extension to .txt
+            filename = os.path.basename(source_file)
+            filename, file_extension = os.path.splitext(filename)
+            new_filename = filename.replace(' ', '_') + '.txt'
+            new_path = os.path.join(event.src_path, new_filename)
+
+            # Move the renamed file to directory_2
+            moved_file = os.path.join('/path/to/directory_2', new_filename)
+            shutil.move(source_file, moved_file)
+
+            # Log the file processing
+            logging.info(f'Received, backed up, and moved: {new_filename}')
+
+            # Add the processed file to the list
+            processed_files.add(moved_file)
+
+    def on_deleted(self, event):
+        if event.is_directory and not os.listdir(event.src_path):
+            logging.info('Directory is empty')
+
+if __name__ == "__main__":
+    directory_to_watch = '/path/to/monitoring_directory'
+    event_handler = MyHandler()
+    observer = Observer()
+    observer.schedule(event_handler, directory_to_watch, recursive=True)
+
+    observer.start()
+
+    while True:
+        # Periodically check if the directory is empty
+        time.sleep(600)  # Sleep for 10 minutes (600 seconds)
+
+        if not os.listdir(directory_to_watch):
+            logging.info('Directory is empty')
+
+    try:
+        while True:
+            time.sleep(10)
+    except KeyboardInterrupt:
+        observer.stop()
+
+    observer.join()
