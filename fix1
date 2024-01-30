@@ -1,0 +1,86 @@
+import os
+import argparse
+import json
+import traceback
+import glob
+import shutil
+from datetime import datetime
+import subprocess
+import time
+import sys
+import logging
+import threading
+
+# Configure logging
+logging.basicConfig(filename='combined_script.log', level=logging.INFO, format='%(asctime)s [%(levelname)s] - %(message)s')
+
+# Create a lock for thread safety
+log_lock = threading.Lock()
+
+# Log messages with thread safety
+def log(message):
+    with log_lock:
+        logging.info(message)
+
+# Get the current timestamp
+now = datetime.now()
+log("File Processing Start Time: %s" % str(now))
+
+# Parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--file", dest="myfile", help="Open specified file")
+parser.add_argument("--path", help="path to Test file", required=True)
+parser.add_argument("--accNum", help="Query Account Number", required=True)
+parser.add_argument("--currCode", help="Query Currency Code", required=True)
+args = parser.parse_args()
+
+myFile = args.myfile
+CustomerFilePath = args.path
+
+log("Selected File: %s" % myFile)
+log("Customer File Path: %s" % CustomerFilePath)
+
+# Check if a file is specified
+if myFile is not None:
+    # Check if the customer file exists
+    if os.path.isfile(CustomerFilePath):
+        log("Customer file does exist")
+    else:
+        log("Error: No Latest Customer file")
+
+    # Read and process the specified file
+    with open(myFile, 'r') as f:
+        lines = f.readlines()
+        account_number = None
+        currency = None
+
+        for line in lines:
+            if ':25:' in line:
+                account_number = line[4:].strip('\n').strip()
+                log("Account Number = %s" % account_number)
+
+            if ':60F:' in line:
+                currency = line[12:15]
+                log("Currency = %s" % currency)
+
+    # Write results to a file
+    with open('results.txt', 'w') as b:
+        b.write(f"Customer File: {myFile}\n")
+        b.write(f"Account Number: {account_number}\n")
+        b.write(f"Currency: {currency}\n")
+
+    # Perform the record search and processing from the original main.py
+    def readDataFromFile(path):
+        try:
+            with open(path, 'r') as f:
+                data = f.read()
+        except Exception as e:
+            traceback.print_exc()
+        return data
+
+    # Rest of your script...
+else:
+    log("Error: No file specified.")
+    # Handle the case when no file is specified (e.g., exit gracefully or print an error message)
+
+# Rest of your script...
