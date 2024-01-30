@@ -1,0 +1,165 @@
+import os
+import sys
+import time
+import subprocess
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from datetime import datetime
+import argparse
+import json
+import traceback
+import glob
+import shutil
+
+class Watcher:
+    DIRECTORY_TO_WATCH = "/abc/wc/reponse/"
+
+    def __init__(self):
+        self.observer = Observer()
+
+    def run(self):
+        event_handler = Handler()
+        self.observer.schedule(event_handler, self.DIRECTORY_TO_WATCH, recursive=True)
+        self.observer.start()
+        try:
+            while True:
+                time.sleep(10)
+        except:
+            self.observer.stop()
+            print("Error")
+        self.observer.join()
+
+class Handler(FileSystemEventHandler):
+    @staticmethod
+    def on_any_event(event):
+        if event.is_directory:
+            return None
+        elif event.event_type == 'created':
+            now = datetime.now()
+            print("Process Start Time =", now)
+            print(f"File Created: {event.src_path}")
+            if event.src_path.split(".")[-1] == 'txt':
+                print("New File MT940 Resisxsd")
+                eventFileName = event.src_path
+                Watcher.process_file(eventFileName)
+
+    @staticmethod
+    def process_file(file_path):
+        try:
+            # Parse command line arguments
+            parser = argparse.ArgumentParser()
+            parser.add_argument("-f", "--file", dest="myfile", help="Open specified file")
+            parser.add_argument("--path", help="path to Test file", required=True)
+            parser.add_argument("--accNum", help="Query Account Number", required=True)
+            parser.add_argument("--currCode", help="Query Currency Code", required=True)
+            args = parser.parse_args()
+
+            myFile = args.myfile
+            CustomerFilePath = args.path
+
+            # If myfile argument is not provided, use the file_path parameter
+            if myFile is None:
+                myFile = file_path
+
+            print("Selected File:", myFile)
+            print("Customer File Path:", CustomerFilePath)
+
+            if os.path.isfile(CustomerFilePath):
+                print("Customer file does exist")
+            else:
+                print("Error: No Latest Customer file")
+
+            with open(myFile, 'r') as f:
+                lines = f.readlines()
+                account_number = None
+                currency = None
+
+                for line in lines:
+                    if ':25:' in line:
+                        account_number = line[4:].strip('\n').strip()
+                        print("Account Number =", account_number)
+
+                    if ':60F:' in line:
+                        currency = line[12:15]
+                        print("Currency =", currency)
+
+            with open('results.txt', 'w') as b:
+                b.write(f"Customer File: {myFile}\n")
+                b.write(f"Account Number: {account_number}\n")
+                b.write(f"Currency: {currency}\n")
+
+            # Perform the record search and processing from the original main.py
+            result, count = Watcher.searchRecord(CustomerFilePath, account_number, currency)
+            print(result)
+
+            if count == 1:
+                now = datetime.now()
+                print(now)
+                Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"]])
+                print("Cust ID =", Cust_Ident)
+                # Removed subprocess call here
+                # subprocess.call(['bash', '/home/abcadmin/cff/execution.sh', Cust_Ident])
+            elif count == 0:
+                print("No Record Found")
+                list_of_files = glob.glob('/opt/abc/abc_data01/gir_reponse/*')
+                latest_file = max(list_of_files, key=os.path.getctime)
+                print("Failed_FileName =", latest_file)
+                print("Moving File to Failed Directory")
+                shutil.move(latest_file, "/opt/habs/abc_data01/gir_failed/")
+            else:
+                print("Multiple Record Found")
+                list_of_files = glob.glob('/opt/abc/abc_data01/gir_reponse/*')
+                latest_file = max(list_of_files, key=os.path.getctime)
+                print("Failed_FileName =", latest_file)
+                print("Moving File to Failed Directory")
+                shutil.move(latest_file, "/opt/hsks/abc_data01/gir_failed/")
+
+    @staticmethod
+    def readDataFromFile(path):
+        try:
+            with open(path, 'r') as f:
+                data = f.read()
+        except Exception as e:
+            traceback.print_exc()
+        return data
+
+    @staticmethod
+    def processRawData(data):
+        data = data.split("\n")
+        data_len = len(data)
+        hashmap = {}
+
+        for i in range(int(data_len / 2)):
+            try:
+                hashmap[str(i)] = json.loads(data[i * 2].replace('=>', ':').replace('nil', 'null'))
+            except Exception as e:
+                traceback.print_exc()
+        return hashmap
+
+    @staticmethod
+    def searchForRecord(process_data, sp_acc_num, sp_acc_curr_code):
+        result = {}
+        count = 0
+        for index, _map in process_data.items():
+            for key, value in _map.items():
+                if "line_type" in key:
+                    for record in _map[key]:
+                        acc_num = record["account_number"]
+                        acc_curr = record["account_currency"]
+                        if acc_num == sp_acc_num and acc_curr == sp_acc_curr_code:
+                            count = count + 1
+                            result["customer_country"] = record["customer_country"]
+                            result["customer_institution"] = record["customer_institution"]
+                            result["customer_identifier"] = record["customer_identifier"]
+        return result, count
+
+    @staticmethod
+    def searchRecord(filepath, sp_acc_num, sp_acc_curr_code):
+        raw_data = Watcher.readDataFromFile(filepath)
+        process_data = Watcher.processRawData(raw_data)
+        searchResult = Watcher.searchForRecord(process_data, sp_acc_num, sp_acc_curr_code)
+        return searchResult
+
+if __name__ == '__main__':
+    w = Watcher()
+    w.run()
