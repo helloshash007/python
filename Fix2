@@ -1,0 +1,69 @@
+import time
+import os
+import logging
+import threading
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import shutil
+
+# Set up logging
+logging.basicConfig(filename='monitoring_log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
+
+# Create a list to keep track of processed files
+processed_files = set()
+
+class MyHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        # ... (unchanged)
+
+    def on_deleted(self, event):
+        if event.is_directory and not os.listdir(event.src_path):
+            logging.info('Directory is empty')
+
+def monitor_directory(directory_to_watch):
+    event_handler = MyHandler()
+    observer = Observer(timeout=5)  # Set a timeout value (in seconds)
+
+    observer.schedule(event_handler, directory_to_watch, recursive=True)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(10)
+    except KeyboardInterrupt:
+        observer.stop()
+
+    observer.join()
+
+def rerun_watcher():
+    while True:
+        time.sleep(300)  # Rerun the watcher every 5 minutes (300 seconds)
+        
+        # Assuming you want to monitor the same directory
+        directory_to_watch = '/path/to/monitoring_directory'
+
+        # Stop the previous observer (if any)
+        if observer and observer.is_alive():
+            observer.stop()
+            observer.join()
+
+        # Start a new observer
+        monitoring_thread = threading.Thread(target=monitor_directory, args=(directory_to_watch,))
+        monitoring_thread.start()
+        monitoring_thread.join()
+
+if __name__ == "__main__":
+    directory_to_watch = '/path/to/monitoring_directory'
+
+    rerun_thread = threading.Thread(target=rerun_watcher)
+    rerun_thread.start()
+
+    monitoring_thread = threading.Thread(target=monitor_directory, args=(directory_to_watch,))
+    monitoring_thread.start()
+
+    try:
+        rerun_thread.join()
+        monitoring_thread.join()
+    except KeyboardInterrupt:
+        rerun_thread.join()
+        monitoring_thread.join()
