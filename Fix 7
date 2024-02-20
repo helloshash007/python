@@ -25,7 +25,7 @@ class MyHandler(FileSystemEventHandler):
 
             # Check if the file has already been processed
             if source_file in processed_files:
-                logging.debug(f'Skipping already processed file: {source_file}')
+                logging.debug('Skipping already processed file: {}'.format(source_file))
                 return
 
             with move_file_lock:
@@ -39,31 +39,47 @@ def move_file(source_file):
     global last_move_time
     current_time = time.time()
 
-    # Check if 20 seconds have passed since the last move
-    if current_time - last_move_time >= 20:
-        # Backup the file to another location
-        backup_dir = '/path/to/backup_directory'
-        shutil.copy(source_file, backup_dir)
-        logging.debug(f'File backed up to: {backup_dir}')
+    # Check if 60 seconds have passed since the last move
+    if current_time - last_move_time >= 60:
+        try:
+            # Backup the file to another location
+            backup_dir = '/path/to/backup_directory'
+            shutil.copy(source_file, backup_dir)
+            logging.debug('File backed up to: {}'.format(backup_dir))
 
-        # Rename the file and change the extension to .txt
-        filename, file_extension = os.path.splitext(os.path.basename(source_file))
-        new_filename = filename.replace(' ', '_') + '.txt'
-        destination_dir = '/path/to/directory_2'  # Change this to your actual destination directory
-        moved_file = os.path.join(destination_dir, new_filename)
+            # Extract the filename and extension
+            filename, file_extension = os.path.splitext(os.path.basename(source_file))
 
-        # Move the renamed file to directory_2
-        shutil.move(source_file, moved_file)
-        logging.info(f'File moved to: {moved_file}')
+            # Extract the last part after the last dot
+            last_part = filename.rsplit('.', 1)[-1]
 
-        # Log the file processing
-        logging.info(f'Received, backed up, and moved: {new_filename}')
+            # Remove the last part from the filename
+            filename_without_last_part = filename.rsplit('.', 1)[0]
 
-        # Update the last move time
-        last_move_time = current_time
+            # Replace spaces with underscores and add .txt
+            new_filename = "{}.txt".format(filename_without_last_part.replace(' ', '_'))
 
-        # Add the processed file to the list
-        processed_files.add(moved_file)
+            # Append the last part back to the filename
+            new_filename_with_last_part = "{}.{}".format(new_filename, last_part)
+
+            destination_dir = '/path/to/directory_2'  # Change this to your actual destination directory
+            moved_file = os.path.join(destination_dir, new_filename_with_last_part)
+
+            # Move the renamed file to directory_2
+            shutil.move(source_file, moved_file)
+            logging.info('File moved to: {}'.format(moved_file))
+
+            # Log the file processing
+            logging.info('Received, backed up, and moved: {}'.format(new_filename_with_last_part))
+
+            # Update the last move time
+            last_move_time = current_time
+
+            # Add the processed file to the list
+            processed_files.add(moved_file)
+
+        except Exception as e:
+            logging.error('Error processing file: {}. Error: {}'.format(source_file, str(e)))
 
 def monitor_directory(directory_to_watch):
     event_handler = MyHandler()
@@ -75,6 +91,10 @@ def monitor_directory(directory_to_watch):
     try:
         while True:
             time.sleep(10)
+            if not observer.is_alive():
+                logging.error('Watcher stopped unexpectedly. Restarting...')
+                observer.stop()
+                observer.start()
     except KeyboardInterrupt:
         observer.stop()
 
@@ -82,7 +102,7 @@ def monitor_directory(directory_to_watch):
 
 def rerun_watcher():
     while True:
-        time.sleep(20)  # Rerun the watcher every 20 seconds
+        time.sleep(60)  # Rerun the watcher every 60 seconds
 
         # Assuming you want to monitor the same directory
         directory_to_watch = '/path/to/monitoring_directory'
