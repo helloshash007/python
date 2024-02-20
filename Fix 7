@@ -1,0 +1,114 @@
+import time
+import os
+import logging
+import threading
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import shutil
+
+# Set up logging
+logging.basicConfig(filename='monitoring_log.txt', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Create a list to keep track of processed files
+processed_files = set()
+
+# Keep track of the last move time
+last_move_time = 0
+
+# Lock to ensure that the move_file function is not executed concurrently
+move_file_lock = threading.Lock()
+
+class MyHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if not event.is_directory:
+            source_file = event.src_path
+
+            # Check if the file has already been processed
+            if source_file in processed_files:
+                logging.debug(f'Skipping already processed file: {source_file}')
+                return
+
+            with move_file_lock:
+                move_file(source_file)
+
+    def on_deleted(self, event):
+        if event.is_directory and not os.listdir(event.src_path):
+            logging.info('Directory is empty')
+
+def move_file(source_file):
+    global last_move_time
+    current_time = time.time()
+
+    # Check if 20 seconds have passed since the last move
+    if current_time - last_move_time >= 20:
+        # Backup the file to another location
+        backup_dir = '/path/to/backup_directory'
+        shutil.copy(source_file, backup_dir)
+        logging.debug(f'File backed up to: {backup_dir}')
+
+        # Rename the file and change the extension to .txt
+        filename, file_extension = os.path.splitext(os.path.basename(source_file))
+        new_filename = filename.replace(' ', '_') + '.txt'
+        destination_dir = '/path/to/directory_2'  # Change this to your actual destination directory
+        moved_file = os.path.join(destination_dir, new_filename)
+
+        # Move the renamed file to directory_2
+        shutil.move(source_file, moved_file)
+        logging.info(f'File moved to: {moved_file}')
+
+        # Log the file processing
+        logging.info(f'Received, backed up, and moved: {new_filename}')
+
+        # Update the last move time
+        last_move_time = current_time
+
+        # Add the processed file to the list
+        processed_files.add(moved_file)
+
+def monitor_directory(directory_to_watch):
+    event_handler = MyHandler()
+    observer = Observer(timeout=5)  # Set a timeout value (in seconds)
+
+    observer.schedule(event_handler, directory_to_watch, recursive=True)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(10)
+    except KeyboardInterrupt:
+        observer.stop()
+
+    observer.join()
+
+def rerun_watcher():
+    while True:
+        time.sleep(20)  # Rerun the watcher every 20 seconds
+
+        # Assuming you want to monitor the same directory
+        directory_to_watch = '/path/to/monitoring_directory'
+
+        # Stop the previous observer (if any)
+        if observer and observer.is_alive():
+            observer.stop()
+            observer.join()
+
+        # Start a new observer
+        monitoring_thread = threading.Thread(target=monitor_directory, args=(directory_to_watch,))
+        monitoring_thread.start()
+        monitoring_thread.join()
+
+if __name__ == "__main__":
+    directory_to_watch = '/path/to/monitoring_directory'
+
+    rerun_thread = threading.Thread(target=rerun_watcher)
+    rerun_thread.start()
+
+    monitoring_thread = threading.Thread(target=monitor_directory, args=(directory_to_watch,))
+    monitoring_thread.start()
+
+    try:
+        rerun_thread.join()
+        monitoring_thread.join()
+    except KeyboardInterrupt:
+        rerun_thread.join()
+        monitoring_thread.join()
