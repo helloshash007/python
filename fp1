@@ -1,0 +1,120 @@
+import os
+import argparse
+import json
+import traceback
+import glob
+import shutil
+from datetime import datetime
+import subprocess
+import time
+import sys
+import logging
+import threading
+
+# Configure logging
+logging.basicConfig(filename='file_processing.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Define a lock for file operations
+file_lock = threading.Lock()
+
+# Get the current timestamp
+now = datetime.now()
+logging.info("File Processing Start Time: " + str(now))
+
+# Parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--file", dest="myfile", help="Open specified file")
+parser.add_argument("--path", help="path to Test file", required=True)
+parser.add_argument("--accNum", help="Query Account Number", required=True)
+parser.add_argument("--currCode", help="Query Currency Code", required=True)
+args = parser.parse_args()
+
+myFile = args.myfile
+CustomerFilePath = args.path
+
+logging.info("Selected File: " + myFile)
+logging.info("Customer File Path: " + CustomerFilePath)
+
+# Remove the ".txt" extension from the filename
+myFile_root, _ = os.path.splitext(myFile)
+
+# Check if the customer file exists
+if os.path.isfile(CustomerFilePath):
+    logging.info("Customer file does exist")
+else:
+    logging.error("Error: No Latest Customer file")
+
+# Read and process the specified file
+def process_file():
+    try:
+        logging.info("Processing file: " + myFile)
+        with open(myFile, 'r') as f:
+            lines = f.readlines()
+            account_number = None
+            currency = None
+
+            for line in lines:
+                if ':25:' in line:
+                    account_number = line[4:].strip('\n').strip()
+                    logging.info("Account Number = " + account_number)
+
+                if ':60F:' in line:
+                    currency = line[12:15]
+                    logging.info("Currency = " + currency)
+
+        # Write results to a file
+        with file_lock:
+            logging.info("Writing results to file: results.txt")
+            with open('results.txt', 'w') as b:
+                b.write(f"Customer File: {myFile}\n")
+                b.write(f"Account Number: {account_number}\n")
+                b.write(f"Currency: {currency}\n")
+        
+        return account_number, currency
+    except Exception as e:
+        logging.error("Error processing file: " + str(e))
+
+# Perform the record search and processing
+def search_and_process(account_number, currency):
+    try:
+        logging.info("Performing search and processing for account number: " + account_number + ", currency: " + currency)
+        result, count = searchRecord(CustomerFilePath, account_number, currency)
+        logging.info("Search result: " + str(result))
+        
+        if count == 1:
+            now = datetime.now()
+            logging.info("Processing Start Time: " + str(now))
+            Cust_Ident = "".join([result["customer_country"], result["customer_institution"], result["customer_identifier"]])
+            logging.info("Cust ID = " + Cust_Ident)
+            # Move the file to a specific directory based on condition
+            new_file_path = f"/opt/babc/CashBalance_Data01/connect_incoming/ABC00011111_{sys.argv[1]}_CFF_bank_{os.path.basename(myFile_root)}.mt940"
+            with file_lock:
+                logging.info("Moving file to: " + new_file_path)
+                shutil.move(myFile, new_file_path)
+                # Create corresponding .ok filea
+                ok_file_path = f"{new_file_path}.ok"
+                with open(ok_file_path, 'w'):
+                    pass
+                logging.info("Created .ok file: " + ok_file_path)
+        elif count == 0:
+            logging.warning("No Record Found")
+            list_of_files = glob.glob('/opt/hsbc/CashAnalytics_Data01/gir_reponse/*')
+            latest_file = max(list_of_files, key=os.path.getctime)
+            logging.info("Failed_FileName = " + latest_file)
+            logging.info("Moving File to Failed Directory")
+            shutil.move(latest_file, "/opt/habs/CashAnalytics_Data01/gir_failed/")
+        else:
+            logging.warning("Multiple Record Found")
+            list_of_files = glob.glob('/opt/hsbc/CashAnalytics_Data01/gir_reponse/*')
+            latest_file = max(list_of_files, key=os.path.getctime)
+            logging.info("Failed_FileName = " + latest_file)
+            logging.info("Moving File to Failed Directory")
+            shutil.move(latest_file, "/opt/hsks/CashAnalytics_Data01/gir_failed/")
+    except Exception as e:
+        logging.error("Error in search and process: " + str(e))
+
+# Perform file processing
+account_number, currency = process_file()
+
+# Perform search and processing
+search_and_process(account_number, currency)
