@@ -1,0 +1,62 @@
+import time
+import os
+import subprocess
+import logging
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class MyHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        try:
+            if not event.is_directory and event.src_path.split(".")[-1] == 'txt':
+                # Remove the .txt extension
+                new_file = event.src_path[:-4]
+                os.rename(event.src_path, new_file)
+                logger.info(f"File added: {new_file}")
+
+                # Run subprocess
+                subprocess.run(['your_command_here', new_file], shell=True)
+        except Exception as e:
+            logger.error(f"Error processing created file: {e}")
+
+    def on_modified(self, event):
+        try:
+            if not event.is_directory and event.src_path.split(".")[-1] == 'txt':
+                # Remove the .txt extension
+                modified_file = event.src_path[:-4]
+                os.rename(event.src_path, modified_file)
+                logger.info(f"File modified: {modified_file}")
+
+                # Run subprocess
+                subprocess.run(['your_command_here', modified_file], shell=True)
+        except Exception as e:
+            logger.error(f"Error processing modified file: {e}")
+
+if __name__ == "__main__":
+    # Watched directory
+    path = '/path/to/your/directory'
+
+    while True:
+        observer = Observer()
+        event_handler = MyHandler()
+        observer.schedule(event_handler, path, recursive=False)
+        observer.start()
+
+        try:
+            while True:
+                time.sleep(45)  # Wait for 45 seconds before picking up the next file
+        except KeyboardInterrupt:
+            observer.stop()
+        except Exception as e:
+            logger.error(f"Exception occurred: {e}")
+        finally:
+            logger.info("Stopping observer.")
+            observer.stop()
+            observer.join()
+
+        # Wait for 5 minutes before restarting the observer
+        time.sleep(5 * 60)
