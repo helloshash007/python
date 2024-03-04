@@ -1,0 +1,62 @@
+import psycopg2
+from prettytable import PrettyTable
+
+def get_high_cpu_queries(conn, duration_hours=2):
+    cursor = conn.cursor()
+    
+    query = """
+    SELECT pg_stat_activity.query,
+           pg_stat_activity.pid,
+           pg_stat_activity.datname,
+           pg_stat_activity.usename,
+           pg_stat_activity.application_name,
+           pg_stat_activity.backend_start,
+           now() - pg_stat_activity.query_start AS duration,
+           pg_stat_activity.cpu_usage
+    FROM pg_stat_activity
+    WHERE state = 'active'
+      AND now() - pg_stat_activity.query_start >= interval '%s hours'
+    ORDER BY pg_stat_activity.cpu_usage DESC;
+    """
+    
+    cursor.execute(query, (duration_hours,))
+    result = cursor.fetchall()
+    
+    cursor.close()
+    return result
+
+def display_results(results):
+    if not results:
+        print("No high CPU queries found.")
+        return
+    
+    table = PrettyTable()
+    table.field_names = ["Query", "PID", "Database", "Username", "Application", "Start Time", "Duration", "CPU Usage (%)"]
+
+    for row in results:
+        table.add_row(row)
+
+    print(table)
+
+def main():
+    # Update these with your PostgreSQL connection details
+    db_params = {
+        'host': 'your_host',
+        'port': 'your_port',
+        'database': 'your_database',
+        'user': 'your_user',
+        'password': 'your_password'
+    }
+
+    try:
+        conn = psycopg2.connect(**db_params)
+        results = get_high_cpu_queries(conn)
+        display_results(results)
+    except psycopg2.Error as e:
+        print(f"Error connecting to PostgreSQL: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+if __name__ == "__main__":
+    main()
