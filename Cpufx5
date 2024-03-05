@@ -1,0 +1,77 @@
+import psutil
+import psycopg2
+import pandas as pd
+from datetime import datetime, timedelta
+
+# PostgreSQL connection parameters
+db_params = {
+    'dbname': 'your_database',
+    'user': 'your_user',
+    'password': 'your_password',
+    'host': 'your_host',
+    'port': 'your_port'
+}
+
+def get_query_cpu_utilization(last_hours=24):
+    connection = psycopg2.connect(**db_params)
+    cursor = connection.cursor()
+
+    try:
+        # Calculate the timestamp for the start time 24 hours ago
+        start_time = datetime.utcnow() - timedelta(hours=last_hours)
+
+        # Query to get CPU utilization per query within the last 24 hours
+        query = """
+            SELECT 
+                query,
+                pid,
+                usename,
+                query_start,
+                state,
+                total_time
+            FROM 
+                pg_stat_activity 
+            WHERE 
+                query_start >= %s
+            ORDER BY 
+                total_time DESC
+        """
+        cursor.execute(query, (start_time,))
+        columns = [desc[0] for desc in cursor.description]
+        query_cpu_utilization = cursor.fetchall()
+
+        return columns, query_cpu_utilization
+
+    except psycopg2.Error as e:
+        print(f"Error connecting to PostgreSQL: {e}")
+    finally:
+        cursor.close()
+        connection.close()
+
+def get_system_stats():
+    # Get CPU usage and other system information
+    cpu_percent = psutil.cpu_percent(interval=1)
+    memory_info = psutil.virtual_memory()
+
+    return {
+        'CPU Percent': cpu_percent,
+        'Memory Percent': memory_info.percent
+    }
+
+if __name__ == "__main__":
+    query_columns, query_cpu_utilization = get_query_cpu_utilization()
+    
+    if query_columns and query_cpu_utilization:
+        # Create a DataFrame for query CPU utilization
+        query_df = pd.DataFrame(query_cpu_utilization, columns=query_columns)
+
+        # Create a DataFrame for system stats
+        system_stats = get_system_stats()
+        system_df = pd.DataFrame([system_stats])
+
+        # Export to Excel
+        with pd.ExcelWriter('output.xlsx', engine='openpyxl') as writer:
+            query_df.to_excel(writer, sheet_name='Query CPU Utilization', index=False)
+            system_df.to_excel(writer, sheet_name='System Stats', index=False)
+    else:
+        print("No data found for the specified time range.")
