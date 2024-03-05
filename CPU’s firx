@@ -1,0 +1,19 @@
+# ... (previous code)
+
+if __name__ == "__main__":
+    query_columns, query_cpu_utilization = get_query_cpu_utilization()
+    
+    if query_columns and query_cpu_utilization:
+        # Create a DataFrame for query CPU utilization
+        query_df = pd.DataFrame(query_cpu_utilization, columns=query_columns)
+
+        # Create a DataFrame for system stats
+        system_stats = get_system_stats()
+        system_df = pd.DataFrame([system_stats])
+
+        # Export to Excel
+        with pd.ExcelWriter('output.xlsx', engine='openpyxl') as writer:
+            query_df.to_excel(writer, sheet_name='Query CPU Utilization', index=False)
+            system_df.to_excel(writer, sheet_name='System Stats', index=False)
+    else:
+        print("No data found for the specified time range.")
