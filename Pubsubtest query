@@ -1,0 +1,12 @@
+SELECT 'CREATE PUBLICATION ' || pubname || ' FOR TABLE ' || array_to_string(tablenames, ', ') || ';'
+FROM pg_publication;
+
+SELECT 'SELECT * FROM pg_create_logical_replication_slot(' || quote_literal(slot_name) || ', ''pgoutput'');'
+FROM pg_replication_slots;
+
+SELECT 'CREATE SUBSCRIPTION ' || subname || ' CONNECTION ''host=<primary_host> port=<primary_port> user=<replication_user> password=<replication_password>'' PUBLICATION ' || pubname || ';'
+FROM pg_subscription;
+
+
+
+
