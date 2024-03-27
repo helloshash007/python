@@ -1,0 +1,71 @@
+from time import sleep
+import sys
+import glob
+import os
+import shutil
+import logging
+from datetime import datetime
+
+def monitor_files():
+    # Set up logging
+    logging.basicConfig(filename='monitoring_log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
+
+    try:
+        while True:
+            now = datetime.now()
+            print("File Received SFG Time File =", now)
+            logging.info('File Received SFG Time File')
+
+            dirName = '/opt/dummy/XXXXX/gir_incoming/'
+            if os.path.exists(dirName) and os.path.isdir(dirName):
+                if not os.listdir(dirName):
+                    sleep(20)
+                    print("gir_incoming Directory is empty")
+                    logging.info('gir_incoming Directory is empty')
+                else:
+                    now = datetime.now()
+                    print("File Received Time ", now)
+
+                    list_of_files = glob.glob("/opt/dummy/XXXXX/gir_incoming/*")
+                    latest_file = max(list_of_files, key=os.path.getctime)
+                    print("FileName =", latest_file)
+                    logging.info(f'File Name: {latest_file}')
+
+                    backup_dir = '/opt/dummy/XXXXX/gir_response02'
+                    logging.info(f"Backup Directory: {backup_dir}")
+                    shutil.copy(latest_file, backup_dir)
+                    logging.info("File has been Backup")
+                    
+                    file_name = latest_file.replace(".", "")
+                    print(file_name)
+                    logging.info(f'File Name: {file_name}')
+
+                    os.rename(latest_file, file_name + ".txt")
+
+                    list_of_Gir_new_files = glob.glob('/opt/dummy/XXXXX/gir_incoming/*')
+                    latest_Gir_new_file = max(list_of_Gir_new_files, key=os.path.getctime)
+                    print("Replace , with UpdatedFileName ", latest_Gir_new_file)
+                    
+                    shutil.copy(latest_Gir_new_file, '/opt/dummy/XXXXX/gir_response01/')
+                    print("BackupFile Copied =", latest_Gir_new_file)
+                    logging.info(f'Backup File Copied: {latest_Gir_new_file}')
+
+                    shutil.move(latest_Gir_new_file, '/opt/dummy/XXXXX/gir_response/')
+                    sleep(20)
+            else:
+                print("Given Directory don't exists")
+                logging.info("Given Directory don't exists!")
+
+            sleep(3600)
+
+    except KeyboardInterrupt:
+        print("Quitting the program")
+        return
+
+    except Exception as e:
+        print("Unexpected error:", e)
+        logging.exception("Unexpected error occurred:")
+        return
+
+# Call the function to start monitoring
+monitor_files()
