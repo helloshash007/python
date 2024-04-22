@@ -1,0 +1,35 @@
+import psutil
+import time
+
+def get_cpu_utilization():
+    cpu_percent = psutil.cpu_percent(interval=None, percpu=False)
+    return cpu_percent
+
+def get_postgres_cpu_utilization():
+    postgres_processes = [p for p in psutil.process_iter(attrs=['pid', 'name']) if 'postgres' in p.info['name']]
+    postgres_cpu_percent = sum(p.cpu_percent(interval=None) for p in postgres_processes)
+    return postgres_cpu_percent
+
+def get_other_processes_cpu_utilization():
+    other_processes_cpu_percent = psutil.cpu_percent(interval=None, percpu=False) - get_postgres_cpu_utilization()
+    return other_processes_cpu_percent
+
+def write_to_log(total_cpu_utilization, postgres_cpu_utilization, other_processes_cpu_utilization):
+    with open("cpu_utilization_log.txt", "a") as log_file:
+        log_file.write(f"Total CPU Utilization: {total_cpu_utilization}%\n")
+        log_file.write(f"Postgres CPU Utilization: {postgres_cpu_utilization}%\n")
+        log_file.write(f"Other Processes CPU Utilization: {other_processes_cpu_utilization}%\n")
+        log_file.write("\n")
+
+def main():
+    while True:
+        total_cpu_utilization = get_cpu_utilization()
+        postgres_cpu_utilization = get_postgres_cpu_utilization()
+        other_processes_cpu_utilization = get_other_processes_cpu_utilization()
+
+        write_to_log(total_cpu_utilization, postgres_cpu_utilization, other_processes_cpu_utilization)
+
+        time.sleep(20)
+
+if __name__ == "__main__":
+    main()
